@@ -1,0 +1,526 @@
+repeat task.wait() until game:IsLoaded()
+repeat task.wait() until game.Players.LocalPlayer
+
+-- // Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local TextChatService = game:GetService("TextChatService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
+
+-- // Local Player
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- // Configuration
+-- Your Webhook URL
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1472120689418043518/6b5RYM4GSKckCBz-c9fFvB9-E-CocJBJWw3Jj6LOOdCW-JVTRS_780aDa2UMiwVVX45C"
+
+-- // Settings State
+local Settings = {
+    TextSize = 14,
+    WindowWidth = 350,
+    WindowHeight = 280,
+    Opacity = 0.5,
+    RGB = {0, 0, 0}
+}
+
+-- // Cleanup Old UI
+for _, gui in pairs(PlayerGui:GetChildren()) do
+    if gui.Name == "UniversalChatUI" then gui:Destroy() end
+end
+
+-- // Create GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "UniversalChatUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = PlayerGui
+
+-- // 1. RULES POPUP (Mobile Optimized)
+local function ShowRules()
+    local RulesFrame = Instance.new("Frame")
+    RulesFrame.Name = "RulesFrame"
+    
+    -- Check if device is likely mobile to adjust size
+    if UserInputService.TouchEnabled then
+        RulesFrame.Size = UDim2.new(0.8, 0, 0.8, 0) -- 80% width/height on mobile
+        RulesFrame.Position = UDim2.new(0.1, 0, 0.1, 0) -- Centered
+    else
+        RulesFrame.Size = UDim2.new(0, 400, 0, 500) -- Fixed size on PC
+        RulesFrame.Position = UDim2.new(0.5, -200, 0.5, -250)
+    end
+
+    RulesFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    RulesFrame.BorderSizePixel = 0
+    RulesFrame.ZIndex = 100
+    RulesFrame.Parent = ScreenGui
+    
+    Instance.new("UICorner", RulesFrame).CornerRadius = UDim.new(0, 12)
+    local Stroke = Instance.new("UIStroke")
+    Stroke.Color = Color3.fromRGB(0, 170, 255)
+    Stroke.Thickness = 2
+    Stroke.Parent = RulesFrame
+    
+    local Title = Instance.new("TextLabel")
+    Title.Text = "**SERVER RULES**"
+    Title.Size = UDim2.new(1, 0, 0, 40) -- Slightly smaller header
+    Title.BackgroundTransparency = 1
+    Title.TextColor3 = Color3.fromRGB(255, 50, 50)
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 24
+    Title.RichText = true
+    Title.Parent = RulesFrame
+    
+    local Scroll = Instance.new("ScrollingFrame")
+    Scroll.Size = UDim2.new(1, -40, 1, -100) -- Adjust space for button
+    Scroll.Position = UDim2.new(0, 20, 0, 50)
+    Scroll.BackgroundTransparency = 1
+    Scroll.ScrollBarThickness = 4
+    Scroll.Parent = RulesFrame
+    
+    local RulesText = Instance.new("TextLabel")
+    RulesText.Text = [[
+💬 Be respectful, no hate or bullying
+🚫 No spam, floods, or ping abuse
+🔒 Keep privacy, no doxxing allowed
+📢 No ads 
+⚠️ No NSFW, illegal, or harmful stuff
+🛑 Hate speech = instant ban
+📬 Report issues directly to staff
+]]
+    RulesText.Size = UDim2.new(1, 0, 0, 0)
+    RulesText.AutomaticSize = Enum.AutomaticSize.Y
+    RulesText.BackgroundTransparency = 1
+    RulesText.TextColor3 = Color3.new(1,1,1)
+    RulesText.Font = Enum.Font.Gotham
+    RulesText.TextSize = 16
+    RulesText.TextXAlignment = Enum.TextXAlignment.Left
+    RulesText.TextYAlignment = Enum.TextYAlignment.Top
+    RulesText.TextWrapped = true
+    RulesText.Parent = Scroll
+    
+    Scroll.CanvasSize = UDim2.new(0, 0, 0, RulesText.AbsoluteSize.Y + 20)
+    
+    local AgreeBtn = Instance.new("TextButton")
+    AgreeBtn.Text = "I Agree & Understand"
+    AgreeBtn.Size = UDim2.new(0, 200, 0, 40)
+    
+    -- Anchor to bottom center
+    AgreeBtn.AnchorPoint = Vector2.new(0.5, 1)
+    AgreeBtn.Position = UDim2.new(0.5, 0, 1, -10)
+    
+    AgreeBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+    AgreeBtn.TextColor3 = Color3.new(1,1,1)
+    AgreeBtn.Font = Enum.Font.GothamBold
+    AgreeBtn.TextSize = 16
+    AgreeBtn.Parent = RulesFrame
+    Instance.new("UICorner", AgreeBtn).CornerRadius = UDim.new(0, 8)
+    
+    AgreeBtn.MouseButton1Click:Connect(function()
+        RulesFrame:Destroy()
+    end)
+end
+
+-- // 2. DRAGGABLE FUNCTION
+local function MakeDraggable(guiObject)
+    local dragging, dragInput, dragStart, startPos
+    guiObject.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = guiObject.Position
+            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+        end
+    end)
+    guiObject.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            guiObject.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+-- // 3. NOTIFICATION SYSTEM
+local NotifyContainer = Instance.new("Frame")
+NotifyContainer.Name = "NotificationContainer"
+NotifyContainer.Size = UDim2.new(0, 250, 1, 0)
+NotifyContainer.Position = UDim2.new(1, -260, 0, 0)
+NotifyContainer.BackgroundTransparency = 1
+NotifyContainer.Parent = ScreenGui
+
+local NotifyLayout = Instance.new("UIListLayout")
+NotifyLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+NotifyLayout.Padding = UDim.new(0, 5)
+NotifyLayout.Parent = NotifyContainer
+
+local function SpawnPopup(sender, message)
+    local Frame = Instance.new("Frame")
+    Frame.Size = UDim2.new(1, 0, 0, 0)
+    Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    Frame.BackgroundTransparency = 0.3
+    Frame.ClipsDescendants = true
+    Frame.Parent = NotifyContainer
+    Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+    local Stroke = Instance.new("UIStroke"); Stroke.Color = Color3.new(1,1,1); Stroke.Transparency = 0.8; Stroke.Parent = Frame
+
+    local Title = Instance.new("TextLabel")
+    Title.Text = sender
+    Title.Size = UDim2.new(1, -10, 0, 15)
+    Title.Position = UDim2.new(0, 5, 0, 2)
+    Title.BackgroundTransparency = 1
+    Title.TextColor3 = Color3.fromRGB(0, 170, 255)
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 12
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+    Title.Parent = Frame
+
+    local Msg = Instance.new("TextLabel")
+    Msg.Text = message
+    Msg.Size = UDim2.new(1, -10, 0, 20)
+    Msg.Position = UDim2.new(0, 5, 0, 18)
+    Msg.BackgroundTransparency = 1
+    Msg.TextColor3 = Color3.new(1,1,1)
+    Msg.Font = Enum.Font.Gotham
+    Msg.TextSize = 12
+    Msg.TextXAlignment = Enum.TextXAlignment.Left
+    Msg.TextWrapped = true
+    Msg.Parent = Frame
+
+    local info = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenService:Create(Frame, info, {Size = UDim2.new(1, 0, 0, 45)}):Play()
+
+    task.delay(4, function()
+        if not Frame or not Frame.Parent then return end
+        TweenService:Create(Frame, info, {Size = UDim2.new(1, 0, 0, 0), BackgroundTransparency = 1}):Play()
+        task.wait(0.3)
+        Frame:Destroy()
+    end)
+end
+
+-- // 4. MAIN WINDOW
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "ChatWindow"
+MainFrame.Size = UDim2.new(0, Settings.WindowWidth, 0, Settings.WindowHeight)
+MainFrame.Position = UDim2.new(0.5, -Settings.WindowWidth/2, 0.5, -Settings.WindowHeight/2)
+MainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+MainFrame.BackgroundTransparency = Settings.Opacity
+MainFrame.Parent = ScreenGui
+MakeDraggable(MainFrame)
+
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+local MainStroke = Instance.new("UIStroke"); MainStroke.Color = Color3.new(1,1,1); MainStroke.Transparency = 0.8; MainStroke.Parent = MainFrame
+
+-- Tab System
+local TabFrame = Instance.new("Frame")
+TabFrame.Size = UDim2.new(1, -60, 0, 30)
+TabFrame.Position = UDim2.new(0, 5, 0, 5)
+TabFrame.BackgroundTransparency = 1
+TabFrame.Parent = MainFrame
+
+local function CreateTab(text, pos, callback)
+    local btn = Instance.new("TextButton")
+    btn.Text = text
+    btn.Size = UDim2.new(0, 70, 1, 0)
+    btn.Position = pos
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    btn.BackgroundTransparency = 0.5
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 12
+    btn.Parent = TabFrame
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+    btn.MouseButton1Click:Connect(callback)
+    return btn
+end
+
+local SettingsBtn = Instance.new("TextButton")
+SettingsBtn.Text = "⚙️"
+SettingsBtn.Size = UDim2.new(0, 30, 0, 30)
+SettingsBtn.Position = UDim2.new(1, -35, 0, 5)
+SettingsBtn.BackgroundTransparency = 1
+SettingsBtn.TextSize = 20
+SettingsBtn.TextColor3 = Color3.new(1,1,1)
+SettingsBtn.Parent = MainFrame
+
+-- Containers
+local GlobalScroll = Instance.new("ScrollingFrame")
+GlobalScroll.Size = UDim2.new(1, -10, 1, -80)
+GlobalScroll.Position = UDim2.new(0, 5, 0, 40)
+GlobalScroll.BackgroundTransparency = 1
+GlobalScroll.ScrollBarThickness = 2
+GlobalScroll.Parent = MainFrame
+
+local PrivateScroll = Instance.new("ScrollingFrame")
+PrivateScroll.Size = UDim2.new(1, -10, 1, -115)
+PrivateScroll.Position = UDim2.new(0, 5, 0, 40)
+PrivateScroll.BackgroundTransparency = 1
+PrivateScroll.ScrollBarThickness = 2
+PrivateScroll.Visible = false
+PrivateScroll.Parent = MainFrame
+
+local function AddLayout(frame)
+    local layout = Instance.new("UIListLayout")
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 4)
+    layout.Parent = frame
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        frame.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 10)
+    end)
+end
+AddLayout(GlobalScroll)
+AddLayout(PrivateScroll)
+
+local InputBox = Instance.new("TextBox")
+InputBox.Size = UDim2.new(1, -10, 0, 30)
+InputBox.Position = UDim2.new(0, 5, 1, -35)
+InputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+InputBox.BackgroundTransparency = 0.5
+InputBox.TextColor3 = Color3.new(1,1,1)
+InputBox.PlaceholderText = "Type here..."
+InputBox.Text = ""
+InputBox.Font = Enum.Font.Gotham
+InputBox.TextSize = 14
+InputBox.Parent = MainFrame
+Instance.new("UICorner", InputBox).CornerRadius = UDim.new(0, 6)
+
+local TargetBox = Instance.new("TextBox")
+TargetBox.Size = UDim2.new(1, -10, 0, 30)
+TargetBox.Position = UDim2.new(0, 5, 1, -70)
+TargetBox.BackgroundColor3 = Color3.fromRGB(40, 20, 60)
+TargetBox.BackgroundTransparency = 0.5
+TargetBox.TextColor3 = Color3.fromRGB(200, 150, 255)
+TargetBox.PlaceholderText = "Target Username..."
+TargetBox.TextSize = 14
+TargetBox.Visible = false
+TargetBox.Parent = MainFrame
+Instance.new("UICorner", TargetBox).CornerRadius = UDim.new(0, 6)
+
+local currentTab = "Global"
+CreateTab("Global", UDim2.new(0, 0, 0, 0), function()
+    currentTab = "Global"
+    GlobalScroll.Visible, PrivateScroll.Visible, TargetBox.Visible = true, false, false
+    InputBox.PlaceholderText = "Type to everyone..."
+end)
+
+CreateTab("Private", UDim2.new(0, 75, 0, 0), function()
+    currentTab = "Private"
+    GlobalScroll.Visible, PrivateScroll.Visible, TargetBox.Visible = false, true, true
+    InputBox.PlaceholderText = "Type whisper..."
+end)
+
+-- // 5. SETTINGS PANEL
+local SettingsFrame = Instance.new("Frame")
+SettingsFrame.Size = UDim2.new(0, 220, 0, 320)
+SettingsFrame.Position = UDim2.new(1, 10, 0, 0)
+SettingsFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+SettingsFrame.BackgroundTransparency = 0.1
+SettingsFrame.Visible = false
+SettingsFrame.Parent = MainFrame
+MakeDraggable(SettingsFrame)
+
+Instance.new("UICorner", SettingsFrame).CornerRadius = UDim.new(0, 10)
+local SetStroke = Instance.new("UIStroke"); SetStroke.Color = Color3.fromRGB(100,100,100); SetStroke.Parent = SettingsFrame
+
+local SetTitle = Instance.new("TextLabel")
+SetTitle.Text = "Settings"
+SetTitle.Size = UDim2.new(1, 0, 0, 30)
+SetTitle.BackgroundTransparency = 1
+SetTitle.TextColor3 = Color3.new(1,1,1)
+SetTitle.Font = Enum.Font.GothamBold
+SetTitle.TextSize = 16
+SetTitle.Parent = SettingsFrame
+
+local SetList = Instance.new("ScrollingFrame")
+SetList.Size = UDim2.new(1, -10, 1, -40)
+SetList.Position = UDim2.new(0, 5, 0, 35)
+SetList.BackgroundTransparency = 1
+SetList.ScrollBarThickness = 3
+SetList.ScrollBarImageColor3 = Color3.fromRGB(100,100,100)
+SetList.Parent = SettingsFrame
+
+local SetLayout = Instance.new("UIListLayout")
+SetLayout.Padding = UDim.new(0, 12)
+SetLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+SetLayout.Parent = SetList
+SetLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    SetList.CanvasSize = UDim2.new(0, 0, 0, SetLayout.AbsoluteContentSize.Y + 20)
+end)
+
+SettingsBtn.MouseButton1Click:Connect(function() SettingsFrame.Visible = not SettingsFrame.Visible end)
+
+local function CreateSlider(name, min, max, default, callback)
+    local F = Instance.new("Frame")
+    F.Size = UDim2.new(0.9, 0, 0, 45)
+    F.BackgroundTransparency = 1
+    F.Parent = SetList
+    
+    local L = Instance.new("TextLabel")
+    L.Text = name .. ": " .. string.format("%.2f", default)
+    L.Size = UDim2.new(1, 0, 0, 15)
+    L.TextColor3 = Color3.new(0.9, 0.9, 0.9)
+    L.BackgroundTransparency = 1
+    L.Font = Enum.Font.Gotham
+    L.TextSize = 12
+    L.TextXAlignment = Enum.TextXAlignment.Left
+    L.Parent = F
+    
+    local BG = Instance.new("Frame")
+    BG.Size = UDim2.new(1, 0, 0, 8)
+    BG.Position = UDim2.new(0, 0, 0, 25)
+    BG.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    BG.Parent = F
+    Instance.new("UICorner", BG).CornerRadius = UDim.new(1, 0)
+    
+    local Fill = Instance.new("Frame")
+    Fill.Size = UDim2.new(math.clamp((default - min) / (max - min), 0, 1), 0, 1, 0)
+    Fill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+    Fill.Parent = BG
+    Instance.new("UICorner", Fill).CornerRadius = UDim.new(1, 0)
+    
+    local Btn = Instance.new("TextButton")
+    Btn.Size = UDim2.new(1, 0, 1, 0)
+    Btn.BackgroundTransparency = 1
+    Btn.Text = ""
+    Btn.Parent = BG
+    
+    local function Update(input)
+        local pos = math.clamp((input.Position.X - BG.AbsolutePosition.X) / BG.AbsoluteSize.X, 0, 1)
+        local val = min + (max - min) * pos
+        Fill.Size = UDim2.new(pos, 0, 1, 0)
+        L.Text = name .. ": " .. string.format("%.2f", val)
+        callback(val)
+    end
+    
+    local dragging = false
+    Btn.InputBegan:Connect(function(i) 
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then 
+            dragging = true 
+            SetList.ScrollingEnabled = false 
+            Update(i) 
+        end 
+    end)
+    
+    UserInputService.InputChanged:Connect(function(i) 
+        if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then 
+            Update(i) 
+        end 
+    end)
+    
+    local function StopDragging()
+        dragging = false
+        SetList.ScrollingEnabled = true 
+    end
+
+    UserInputService.InputEnded:Connect(function(i) 
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then 
+            StopDragging()
+        end 
+    end)
+    
+    Btn.InputEnded:Connect(StopDragging)
+end
+
+-- Populate Settings
+CreateSlider("Opacity", 0, 1, Settings.Opacity, function(v) MainFrame.BackgroundTransparency = v end)
+CreateSlider("Red", 0, 1, Settings.RGB[1], function(v) Settings.RGB[1]=v; MainFrame.BackgroundColor3 = Color3.new(Settings.RGB[1],Settings.RGB[2],Settings.RGB[3]) end)
+CreateSlider("Green", 0, 1, Settings.RGB[2], function(v) Settings.RGB[2]=v; MainFrame.BackgroundColor3 = Color3.new(Settings.RGB[1],Settings.RGB[2],Settings.RGB[3]) end)
+CreateSlider("Blue", 0, 1, Settings.RGB[3], function(v) Settings.RGB[3]=v; MainFrame.BackgroundColor3 = Color3.new(Settings.RGB[1],Settings.RGB[2],Settings.RGB[3]) end)
+CreateSlider("Width", 200, 600, Settings.WindowWidth, function(v) MainFrame.Size = UDim2.new(0, v, 0, MainFrame.Size.Y.Offset) end)
+CreateSlider("Height", 200, 600, Settings.WindowHeight, function(v) MainFrame.Size = UDim2.new(0, MainFrame.Size.X.Offset, 0, v) end)
+CreateSlider("Text Size", 8, 30, Settings.TextSize, function(v) 
+    Settings.TextSize = v
+    for _,c in pairs(GlobalScroll:GetChildren()) do if c:IsA("TextLabel") then c.TextSize = v end end
+    for _,c in pairs(PrivateScroll:GetChildren()) do if c:IsA("TextLabel") then c.TextSize = v end end
+end)
+
+-- // 6. WEBHOOK LOGIC (UPDATED FOR EXECUTORS)
+local function SendWebhook(sender, msg)
+    if not WEBHOOK_URL or WEBHOOK_URL == "" then return end
+    
+    -- Format for Discord
+    local data = {
+        ["content"] = "",
+        ["embeds"] = {{
+            ["title"] = "New Message Logged",
+            ["color"] = 3447003,
+            ["fields"] = {
+                {["name"] = "Player", ["value"] = sender, ["inline"] = true},
+                {["name"] = "Message", ["value"] = msg, ["inline"] = false},
+                {["name"] = "Game", ["value"] = "ID: "..tostring(game.PlaceId), ["inline"] = true}
+            },
+            ["timestamp"] = DateTime.now():ToIsoDate()
+        }}
+    }
+    
+    local jsonData = HttpService:JSONEncode(data)
+    local headers = {["Content-Type"] = "application/json"}
+    
+    -- Try to use executor-specific HTTP request function first
+    local requestFunc = request or http_request or (syn and syn.request)
+    
+    if requestFunc then
+        requestFunc({
+            Url = WEBHOOK_URL,
+            Method = "POST",
+            Headers = headers,
+            Body = jsonData
+        })
+    else
+        -- Fallback to standard Roblox HttpService (will error in vanilla client, but works in Studio server view)
+        pcall(function()
+            HttpService:PostAsync(WEBHOOK_URL, jsonData)
+        end)
+    end
+end
+
+local function GetColor(userId)
+    local hue = (userId % 360) / 360
+    return Color3.fromHSV(hue, 0.7, 1)
+end
+
+local function AddMessage(scroll, name, msg, colorOverride)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 0, 0)
+    lbl.AutomaticSize = Enum.AutomaticSize.Y
+    lbl.BackgroundTransparency = 1
+    lbl.TextWrapped = true
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.TextSize = Settings.TextSize
+    lbl.Font = Enum.Font.GothamMedium
+    lbl.RichText = true
+    lbl.TextColor3 = Color3.new(1,1,1)
+    local c = colorOverride or Color3.fromRGB(255,255,255)
+    lbl.Text = string.format("<font color='rgb(%d,%d,%d)'>%s:</font> %s", c.R*255, c.G*255, c.B*255, name, msg)
+    lbl.Parent = scroll
+end
+
+local IsTextChatService = TextChatService.ChatVersion == Enum.ChatVersion.TextChatService
+
+local function OnMessage(senderName, message, senderId)
+    SpawnPopup(senderName, message)
+    AddMessage(GlobalScroll, senderName, message, GetColor(senderId))
+    
+    -- Logs messages from OTHER players to the webhook
+    if senderName ~= LocalPlayer.Name then
+        SendWebhook(senderName, message)
+    end
+
+    if message:lower():match("^/w ") or (currentTab == "Private" and senderName == LocalPlayer.Name) then
+        AddMessage(PrivateScroll, senderName, message, Color3.fromRGB(200, 100, 255))
+    end
+end
+
+if IsTextChatService then
+    TextChatService.MessageReceived:Connect(function(tab)
+        if tab.TextSource then OnMessage(tab.TextSource.Name, tab.Text, tab.TextSource.UserId) end
+    end)
+else
+    local function hookPlayer(p)
+        p.Chatted:Connect(function(msg) OnMessage(p.Name, msg, p.UserId) end)
+    end
+    for _, p in pairs(Player
